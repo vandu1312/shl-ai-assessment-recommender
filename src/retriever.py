@@ -1,16 +1,16 @@
 import pandas as pd
 
 from sentence_transformers import SentenceTransformer
-
 from sklearn.metrics.pairwise import cosine_similarity
 
 
 # =====================================
-# LOAD MODEL
+# LOAD LIGHTWEIGHT MODEL
 # =====================================
 
 model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
+    "all-MiniLM-L6-v2",
+    device="cpu"
 )
 
 # =====================================
@@ -38,14 +38,20 @@ df["search_text"] = (
 )
 
 # =====================================
-# CREATE EMBEDDINGS
+# LIMIT DATASET SIZE FOR MEMORY
+# =====================================
+
+df = df.head(300)
+
+# =====================================
+# CREATE EMBEDDINGS ONCE
 # =====================================
 
 catalog_embeddings = model.encode(
     df["search_text"].tolist(),
-    convert_to_numpy=True
+    convert_to_numpy=True,
+    show_progress_bar=False
 )
-
 
 # =====================================
 # RETRIEVE FUNCTION
@@ -56,19 +62,21 @@ def retrieve_assessments(context):
     query_parts = []
 
     query_parts.extend(
-        context["roles"]
+        context.get("roles", [])
     )
 
     query_parts.extend(
-        context["technical"]
+        context.get("technical", [])
     )
 
-    if context["personality"]:
+    if context.get("personality"):
+
         query_parts.append(
             "personality behavioral communication"
         )
 
-    if context["stakeholder"]:
+    if context.get("stakeholder"):
+
         query_parts.append(
             "stakeholder communication teamwork"
         )
@@ -76,6 +84,7 @@ def retrieve_assessments(context):
     query = " ".join(query_parts)
 
     if not query.strip():
+
         return []
 
     # =====================================
@@ -84,7 +93,8 @@ def retrieve_assessments(context):
 
     query_embedding = model.encode(
         [query],
-        convert_to_numpy=True
+        convert_to_numpy=True,
+        show_progress_bar=False
     )
 
     # =====================================
@@ -96,14 +106,16 @@ def retrieve_assessments(context):
         catalog_embeddings
     )[0]
 
-    df["score"] = similarities
+    temp_df = df.copy()
+
+    temp_df["score"] = similarities
 
     # =====================================
     # SORT RESULTS
     # =====================================
 
     results = (
-        df.sort_values(
+        temp_df.sort_values(
             by="score",
             ascending=False
         )
