@@ -1,6 +1,4 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List
+import streamlit as st
 
 from src.utils import (
     build_context,
@@ -12,123 +10,154 @@ from src.utils import (
 
 from src.retriever import retrieve_assessments
 
-app = FastAPI()
 
 # =====================================
-# REQUEST SCHEMA
+# PAGE CONFIG
 # =====================================
 
-class Message(BaseModel):
-    role: str
-    content: str
-
-
-class ChatRequest(BaseModel):
-    messages: List[Message]
-
+st.set_page_config(
+    page_title="SHL AI Assessment Recommender",
+    layout="wide"
+)
 
 # =====================================
-# HEALTH ENDPOINT
+# TITLE
 # =====================================
 
-@app.get("/health")
-def health():
+st.title(
+    "SHL AI Assessment Recommendation System"
+)
 
-    return {"status": "ok"}
-
+st.markdown(
+    """
+    Enter hiring requirements, role details,
+    technical skills, or behavioral needs
+    to receive recommended SHL assessments.
+    """
+)
 
 # =====================================
-# CHAT ENDPOINT
+# INPUT
 # =====================================
 
-@app.post("/chat")
-def chat(request: ChatRequest):
+query = st.text_area(
+    "Enter Hiring Requirement",
+    placeholder=(
+        "Example: Hiring Python developer "
+        "with communication and teamwork skills"
+    ),
+    height=150
+)
 
-    messages = [
-        msg.dict()
-        for msg in request.messages
-    ]
+# =====================================
+# BUTTON
+# =====================================
 
-    # =====================================
-    # BUILD CONTEXT
-    # =====================================
+if st.button("Get Recommendations"):
 
-    context = build_context(messages)
+    if not query.strip():
 
-    # =====================================
-    # DETECT INTENT
-    # =====================================
+        st.warning(
+            "Please enter a hiring requirement."
+        )
 
-    intent = detect_intent(context)
+    else:
 
-    # =====================================
-    # REFUSAL
-    # =====================================
+        messages = [
+            {
+                "role": "user",
+                "content": query
+            }
+        ]
 
-    if intent == "refusal":
+        # =====================================
+        # BUILD CONTEXT
+        # =====================================
 
-        return {
-            "reply": refusal_response(),
-            "recommendations": [],
-            "end_of_conversation": False
-        }
+        context = build_context(messages)
 
-    # =====================================
-    # COMPARISON
-    # =====================================
+        # =====================================
+        # DETECT INTENT
+        # =====================================
 
-    if intent == "comparison":
+        intent = detect_intent(context)
 
-        return {
-            "reply": build_comparison_response(),
-            "recommendations": [],
-            "end_of_conversation": False
-        }
+        # =====================================
+        # REFUSAL
+        # =====================================
 
-    # =====================================
-    # CLARIFICATION
-    # =====================================
+        if intent == "refusal":
 
-    if not has_enough_context(context):
+            st.error(
+                refusal_response()
+            )
 
-        return {
-            "reply": (
-                "Could you share more details about the role, "
-                "skills, or seniority level?"
-            ),
-            "recommendations": [],
-            "end_of_conversation": False
-        }
+        # =====================================
+        # COMPARISON
+        # =====================================
 
-    # =====================================
-    # SEMANTIC RETRIEVAL
-    # =====================================
+        elif intent == "comparison":
 
-    recommendations = retrieve_assessments(context)
+            st.info(
+                build_comparison_response()
+            )
 
-    # =====================================
-    # NO RESULTS
-    # =====================================
+        # =====================================
+        # CLARIFICATION
+        # =====================================
 
-    if len(recommendations) == 0:
+        elif not has_enough_context(context):
 
-        return {
-            "reply": (
-                "I could not find matching SHL assessments."
-            ),
-            "recommendations": [],
-            "end_of_conversation": False
-        }
+            st.warning(
+                "Could you share more details "
+                "about the role, skills, "
+                "or seniority level?"
+            )
 
-    # =====================================
-    # SUCCESS
-    # =====================================
+        # =====================================
+        # RETRIEVAL
+        # =====================================
 
-    return {
-        "reply": (
-            f"I found {len(recommendations)} "
-            f"SHL assessments matching your needs."
-        ),
-        "recommendations": recommendations,
-        "end_of_conversation": True
-    }
+        else:
+
+            recommendations = retrieve_assessments(
+                context
+            )
+
+            # =====================================
+            # NO RESULTS
+            # =====================================
+
+            if len(recommendations) == 0:
+
+                st.warning(
+                    "No matching SHL assessments found."
+                )
+
+            # =====================================
+            # DISPLAY RESULTS
+            # =====================================
+
+            else:
+
+                st.success(
+                    f"Found {len(recommendations)} matching assessments"
+                )
+
+                for rec in recommendations:
+
+                    with st.container():
+
+                        st.markdown(
+                            f"## {rec['name']}"
+                        )
+
+                        st.write(
+                            f"Assessment Type: {rec['test_type']}"
+                        )
+
+                        st.markdown(
+                            f"[Open Assessment]({rec['url']})"
+                        )
+
+                        st.divider()
