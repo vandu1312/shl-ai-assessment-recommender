@@ -103,7 +103,7 @@ curl -X POST "http://127.0.0.1:8001/chat" \
 * **app.py** → Main FastAPI application containing API endpoints and search logic
 * **src/utils.py** → Handles context building, intent detection, and conversation understanding
 * **data/shl_assessments.csv** → SHL assessment catalog used for recommendations
-* **retriever.py** → (Optional/if present) Handles retrieval logic for matching assessments
+* **src/retriever.py** →  Handles retrieval logic for matching assessments
 * **venv/** → Python virtual environment (not included in deployment)
 
 ---
