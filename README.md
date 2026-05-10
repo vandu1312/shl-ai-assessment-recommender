@@ -137,8 +137,4 @@ Returns SHL assessment recommendations based on user input
 LinkedIn: [https://www.linkedin.com/in/vandana-harijana/](https://www.linkedin.com/in/vandana-harijana/)
 GitHub: [https://github.com/vandu1312](https://github.com/vandu1312)
 
-```
 
-
-- or :contentReference[oaicite:2]{index=2}
-```
