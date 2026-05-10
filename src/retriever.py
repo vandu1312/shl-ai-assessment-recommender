@@ -5,59 +5,94 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 # =====================================
-# LOAD LIGHTWEIGHT MODEL
+# GLOBAL VARIABLES
 # =====================================
 
-model = SentenceTransformer(
-    "all-MiniLM-L6-v2",
-    device="cpu"
-)
+model = None
+df = None
+catalog_embeddings = None
+
 
 # =====================================
-# LOAD DATASET
+# LOAD MODEL LAZILY
 # =====================================
 
-df = pd.read_csv(
-    "data/shl_assessments.csv"
-)
+def get_model():
 
-df = df.fillna("")
+    global model
 
-df = df.drop_duplicates(
-    subset=["name"]
-)
+    if model is None:
 
-# =====================================
-# CREATE SEARCH TEXT
-# =====================================
+        model = SentenceTransformer(
+            "all-MiniLM-L6-v2",
+            device="cpu"
+        )
 
-df["search_text"] = (
-    df["name"].astype(str)
-    + " "
-    + df["test_type"].astype(str)
-)
+    return model
+
 
 # =====================================
-# LIMIT DATASET SIZE FOR MEMORY
+# LOAD DATASET LAZILY
 # =====================================
 
-df = df.head(300)
+def load_catalog():
 
-# =====================================
-# CREATE EMBEDDINGS ONCE
-# =====================================
+    global df
+    global catalog_embeddings
 
-catalog_embeddings = model.encode(
-    df["search_text"].tolist(),
-    convert_to_numpy=True,
-    show_progress_bar=False
-)
+    if df is None:
+
+        df = pd.read_csv(
+            "data/shl_assessments.csv"
+        )
+
+        df = df.fillna("")
+
+        df = df.drop_duplicates(
+            subset=["name"]
+        )
+
+        # =====================================
+        # CREATE SEARCH TEXT
+        # =====================================
+
+        df["search_text"] = (
+            df["name"].astype(str)
+            + " "
+            + df["test_type"].astype(str)
+        )
+
+        # =====================================
+        # LIMIT DATASET SIZE
+        # =====================================
+
+        df = df.head(300)
+
+        # =====================================
+        # CREATE EMBEDDINGS ONLY ONCE
+        # =====================================
+
+        model_instance = get_model()
+
+        catalog_embeddings = model_instance.encode(
+            df["search_text"].tolist(),
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            batch_size=16
+        )
+
+    return df, catalog_embeddings
+
 
 # =====================================
 # RETRIEVE FUNCTION
 # =====================================
 
 def retrieve_assessments(context):
+
+    model_instance = get_model()
+
+    df_loaded, embeddings = load_catalog()
 
     query_parts = []
 
@@ -91,7 +126,7 @@ def retrieve_assessments(context):
     # QUERY EMBEDDING
     # =====================================
 
-    query_embedding = model.encode(
+    query_embedding = model_instance.encode(
         [query],
         convert_to_numpy=True,
         show_progress_bar=False
@@ -103,10 +138,10 @@ def retrieve_assessments(context):
 
     similarities = cosine_similarity(
         query_embedding,
-        catalog_embeddings
+        embeddings
     )[0]
 
-    temp_df = df.copy()
+    temp_df = df_loaded.copy()
 
     temp_df["score"] = similarities
 
