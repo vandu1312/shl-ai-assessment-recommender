@@ -1,3 +1,5 @@
+import os
+import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Optional
@@ -158,3 +160,13 @@ def chat(request: ChatRequest):
         "recommendations": formatted_recommendations,
         "end_of_conversation": True
     }
+
+
+# =========================================
+# SERVER ENTRYPOINT FOR RENDER / LOCAL
+# =========================================
+
+if __name__ == "__main__":
+    # Dynamically bind to Render's PORT env variable (defaults to 10000)
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
