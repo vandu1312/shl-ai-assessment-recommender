@@ -1,8 +1,10 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi
 uvicorn
 pandas
 numpy
 scikit-learn
 sentence-transformers
-torch --index-url https://download.pytorch.org/whl/cpu
+torch
 pydantic
