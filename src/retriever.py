@@ -1,6 +1,8 @@
-import pandas as pd
 
-from sentence_transformers import SentenceTransformer
+import os
+import pandas as pd
+import gc
+
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -11,6 +13,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 model = None
 df = None
 catalog_embeddings = None
+
+# Resolve dataset path independently of working directory
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
+
+DATASET_PATH = os.path.join(
+    BASE_DIR,
+    "data",
+    "shl_assessments.csv"
+)
 
 
 # =====================================
@@ -23,8 +36,10 @@ def get_model():
 
     if model is None:
 
+        from sentence_transformers import SentenceTransformer
+
         model = SentenceTransformer(
-            "all-MiniLM-L6-v2",
+            "sentence-transformers/all-MiniLM-L6-v2",
             device="cpu"
         )
 
@@ -42,9 +57,12 @@ def load_catalog():
 
     if df is None:
 
-        df = pd.read_csv(
-            "data/shl_assessments.csv"
-        )
+        if not os.path.exists(DATASET_PATH):
+            raise FileNotFoundError(
+                f"Dataset not found: {DATASET_PATH}"
+            )
+
+        df = pd.read_csv(DATASET_PATH)
 
         df = df.fillna("")
 
@@ -66,7 +84,7 @@ def load_catalog():
         # LIMIT DATASET SIZE
         # =====================================
 
-        df = df.head(300)
+        df = df.head(300).reset_index(drop=True)
 
         # =====================================
         # CREATE EMBEDDINGS ONLY ONCE
@@ -78,8 +96,10 @@ def load_catalog():
             df["search_text"].tolist(),
             convert_to_numpy=True,
             show_progress_bar=False,
-            batch_size=16
+            batch_size=4
         )
+
+        gc.collect()
 
     return df, catalog_embeddings
 
@@ -89,10 +109,6 @@ def load_catalog():
 # =====================================
 
 def retrieve_assessments(context):
-
-    model_instance = get_model()
-
-    df_loaded, embeddings = load_catalog()
 
     query_parts = []
 
@@ -119,8 +135,15 @@ def retrieve_assessments(context):
     query = " ".join(query_parts)
 
     if not query.strip():
-
         return []
+
+    # =====================================
+    # LOAD MODEL AND CATALOG
+    # =====================================
+
+    model_instance = get_model()
+
+    df_loaded, embeddings = load_catalog()
 
     # =====================================
     # QUERY EMBEDDING
@@ -129,7 +152,8 @@ def retrieve_assessments(context):
     query_embedding = model_instance.encode(
         [query],
         convert_to_numpy=True,
-        show_progress_bar=False
+        show_progress_bar=False,
+        batch_size=1
     )
 
     # =====================================
@@ -141,21 +165,13 @@ def retrieve_assessments(context):
         embeddings
     )[0]
 
-    temp_df = df_loaded.copy()
-
-    temp_df["score"] = similarities
-
     # =====================================
     # SORT RESULTS
     # =====================================
 
-    results = (
-        temp_df.sort_values(
-            by="score",
-            ascending=False
-        )
-        .head(10)
-    )
+    top_indices = similarities.argsort()[::-1][:10]
+
+    results = df_loaded.iloc[top_indices]
 
     # =====================================
     # RETURN FORMAT
